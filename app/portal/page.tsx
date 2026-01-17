@@ -80,8 +80,8 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
     setSyncing(true);
 
     try {
-      // FIX: Cast options to 'any' to avoid the TypeScript build error on Vercel
-      const sheets = await readXlsxFile(file, { getSheets: true } as any);
+      // FIX: Explicitly cast 'sheets' as any array to satisfy the Vercel build iterator check
+      const sheets = await readXlsxFile(file, { getSheets: true } as any) as any[];
       const studentMap = new Map<string, StudentRecord>();
 
       for (const sheet of sheets) {
