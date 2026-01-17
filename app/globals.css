@@ -1,26 +1,80 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* Colors */
+  --color-primary-blue: #2563eb;
+  --color-secondary-teal: #0ea5e9;
+  --color-accent-purple: #8b5cf6;
+  --color-light-bg: #f8fafc;
+  --color-dark-bg: #0f172a;
+  --color-text-dark: #1e293b;
+  --color-text-light: #64748b;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Custom Animations Config */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-fade-in: fadeIn 0.8s ease-out;
+  --animate-shimmer: shimmer 2s infinite;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  
+  /* The variable for your Ken Burns timing */
+  --animate-ken-burns: ken-burns 12s ease-in-out infinite;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(37, 99, 235, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(37, 99, 235, 0.6); }
+  }
+  @keyframes ken-burns {
+    0% { transform: scale(1) translate(0, 0); opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.3; }
+    100% { transform: scale(1.15) translate(-2%, -2%); opacity: 0; }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Standard CSS classes must go here, OUTSIDE the @theme block.
+   Tailwind v4 will automatically generate utility classes for anything 
+   defined in --animate-* above (e.g., animate-ken-burns).
+*/
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-light-bg text-text-dark antialiased;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, var(--color-primary-blue), var(--color-accent-purple));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, var(--color-accent-purple), var(--color-primary-blue));
 }
