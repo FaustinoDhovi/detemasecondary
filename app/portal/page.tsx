@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import readXlsxFile from 'read-excel-file';
 import { 
-  Lock, Wallet, Upload, LogOut, Fingerprint,
-  Phone, BookOpen, GraduationCap, ArrowRight, UserCircle2, 
-  ShieldCheck, CreditCard, Bell, Download, HelpCircle, Camera, CheckCircle2
+  Wallet, Upload, LogOut, UserCircle2, 
+  ShieldCheck, CreditCard, FileText, GraduationCap,
+  Lock, CheckCircle2, ClipboardList
 } from 'lucide-react';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,6 +14,12 @@ const supabase = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUP
 
 const ADMIN_USER = process.env.NEXT_PUBLIC_ADMIN_USERNAME || 'admin'; 
 const ADMIN_PASS = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'DeteMa_1984';
+
+// BUSINESS LOGIC CONFIGURATION
+const TERM_1_FEE = 70;
+const TERM_2_FEE = 70;
+const CLOSING_DATE = new Date('2026-04-02');
+const REPORT_ACCESS_THRESHOLD = 30; // Students owing >= $30 cannot see reports
 
 interface StudentRecord {
   id: string;
@@ -24,6 +30,12 @@ interface StudentRecord {
   term_3_balance: number;
   term_1_2026_balance: number;
   total_outstanding: number;
+}
+
+interface MarkRecord {
+  subject: string;
+  mark: number;
+  grade: string;
 }
 
 function AuthPage({ onLogin }: { onLogin: (role: 'admin' | 'student', student: StudentRecord | null) => void }) {
@@ -41,7 +53,7 @@ function AuthPage({ onLogin }: { onLogin: (role: 'admin' | 'student', student: S
       else alert("Unauthorized Admin Access");
     } else {
       const { data } = await supabase.from('student_ledger').select('*').eq('id', loginId.toUpperCase().trim()).single();
-      if (data) onLogin('student', data);
+      if (data) onLogin('student', data as StudentRecord);
       else alert("Student ID not found.");
     }
     setLoading(false);
@@ -53,19 +65,18 @@ function AuthPage({ onLogin }: { onLogin: (role: 'admin' | 'student', student: S
         <div className="relative z-10">
           <img src="/logo.png" alt="Logo" className="w-24 h-24 mb-12" />
           <h1 className="text-7xl font-black italic leading-[0.8] uppercase tracking-tighter mb-6">Detema<br/><span className="text-blue-500">Cloud</span></h1>
-          <p className="text-slate-400 font-bold italic mb-12 uppercase tracking-widest text-xs">Official School Ledger Terminal</p>
+          <p className="text-slate-400 font-bold italic mb-12 uppercase tracking-widest text-xs tracking-widest">Official School Portal</p>
         </div>
       </div>
-
       <div className="lg:w-1/2 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-md space-y-8">
-          <h2 className="text-4xl font-black italic uppercase text-slate-900">{isAdmin ? 'Admin Entry' : 'Student Entry'}</h2>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input type="text" placeholder={isAdmin ? "Username" : "Student ID (e.g. S123)"} className="w-full px-8 py-5 rounded-[2rem] bg-slate-50 border border-slate-100 font-black text-slate-900" onChange={(e) => setLoginId(e.target.value)} />
-            <input type="password" placeholder="Password" className="w-full px-8 py-5 rounded-[2rem] bg-slate-50 border border-slate-100 font-black text-slate-900" onChange={(e) => setPassword(e.target.value)} />
+          <h2 className="text-4xl font-black italic uppercase text-slate-900">{isAdmin ? 'Staff Portal' : 'Student Login'}</h2>
+          <form onSubmit={handleLogin} className="space-y-4 text-slate-900">
+            <input type="text" placeholder="ID Number" className="w-full px-8 py-5 rounded-[2rem] bg-slate-50 border border-slate-100 font-black" onChange={(e) => setLoginId(e.target.value)} />
+            <input type="password" placeholder="Password" className="w-full px-8 py-5 rounded-[2rem] bg-slate-50 border border-slate-100 font-black" onChange={(e) => setPassword(e.target.value)} />
             <button className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl">{loading ? "Authenticating..." : "Access Portal"}</button>
           </form>
-          <button onClick={() => setIsAdmin(!isAdmin)} className="w-full text-[10px] font-black text-blue-600 uppercase italic underline underline-offset-4 decoration-2">{isAdmin ? "Student View" : "Administrator Terminal"}</button>
+          <button onClick={() => setIsAdmin(!isAdmin)} className="w-full text-[10px] font-black text-blue-600 uppercase italic underline underline-offset-4 decoration-2">{isAdmin ? "Student View" : "Bursar/Staff Terminal"}</button>
         </div>
       </div>
     </div>
@@ -73,184 +84,189 @@ function AuthPage({ onLogin }: { onLogin: (role: 'admin' | 'student', student: S
 }
 
 function Dashboard({ role, student }: { role: 'admin' | 'student', student: StudentRecord | null }) {
+  const [activeTab, setActiveTab] = useState<'finance' | 'results'>('finance');
   const [syncing, setSyncing] = useState(false);
-  const [popUploading, setPopUploading] = useState(false);
+  const [marks, setMarks] = useState<MarkRecord[]>([]);
 
-  const handlePopUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !supabase || !student) return;
-    setPopUploading(true);
-    
-    try {
-      // In a real app, you'd upload to Supabase Storage first. 
-      // For now, we simulate the submission to the audit table.
-      const { error } = await supabase.from('payment_submissions').insert({
-        student_id: student.id,
-        student_name: student.name,
-        submission_date: new Date().toISOString(),
-        status: 'pending'
-      });
-      
-      if (error) throw error;
-      alert("Proof of Payment submitted! The bursar will verify this within 24 hours.");
-    } catch (err: any) {
-      alert("Submission failed: " + err.message);
-    } finally {
-      setPopUploading(false);
+  const today = new Date();
+  const isAfterClosing = today >= CLOSING_DATE;
+  
+  // Calculate debt for reporting restriction (Excluding potential future term fees)
+  const reportDebt = (student?.previous_balance || 0) + (student?.term_3_balance || 0) + (student?.term_1_2026_balance || 0);
+  const hasReportAccess = reportDebt < REPORT_ACCESS_THRESHOLD;
+
+  useEffect(() => {
+    if (role === 'student' && student && hasReportAccess) {
+      fetchMarks();
     }
+  }, [student, hasReportAccess]);
+
+  const fetchMarks = async () => {
+    if (!supabase || !student) return;
+    const { data } = await supabase.from('student_marks').select('subject, mark, grade').eq('student_id', student.id);
+    if (data) setMarks(data as MarkRecord[]);
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMarkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !supabase || role !== 'admin') return;
     setSyncing(true);
+    try {
+      const rows = await readXlsxFile(file);
+      const headers = rows[2] as string[]; // Based on "MARK SCHEDULE TEMPLATE" Row 3
+      const dataRows = rows.slice(3);
+      const allMarks: any[] = [];
+      
+      dataRows.forEach((row: any) => {
+        if (!row[1]) return; // Skip empty names
+        for (let i = 3; i < headers.length; i++) {
+          if (headers[i] && !['GRAND TOTAL', 'POSITION'].includes(headers[i])) {
+            const val = Number(row[i]) || 0;
+            allMarks.push({
+              student_id: row[0], // Using "No." column as temporary link
+              student_name: row[1],
+              subject: headers[i],
+              mark: val,
+              grade: val >= 75 ? 'A' : val >= 60 ? 'B' : val >= 50 ? 'C' : val >= 40 ? 'D' : 'U'
+            });
+          }
+        }
+      });
+      await supabase.from('student_marks').delete().neq('student_id', 'init');
+      await supabase.from('student_marks').insert(allMarks);
+      alert("Academic marks updated!");
+    } catch (err: any) { alert(err.message); } finally { setSyncing(false); }
+  };
 
+  const handleLedgerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !supabase || role !== 'admin') return;
+    setSyncing(true);
     try {
       const sheetsResult = await readXlsxFile(file, { getSheets: true } as any);
       const sheets = (sheetsResult as unknown) as any[];
       const studentMap = new Map<string, StudentRecord>();
-
       for (const sheet of sheets) {
         const rows = await readXlsxFile(file, { sheet: sheet.name });
         rows.slice(1).forEach((row) => {
-          if (!row[0] && !row[1]) return; 
-          const studentId = row[1] ? String(row[1]).trim().toUpperCase() : null;
-          if (!studentId) return;
+          const studentId = row[1] ? String(row[1]).trim().toUpperCase() : '';
+          const enrollmentYear = studentId.substring(0, 4);
+          if (!['2023', '2024', '2025', '2026'].includes(enrollmentYear)) return;
+          
           const prev = Number(row[3]) || 0;
           const t3 = Number(row[4]) || 0;
-          const t1 = Number(row[5]) || 0;
+          const t1 = TERM_1_FEE;
+          const t2 = isAfterClosing ? TERM_2_FEE : 0;
+
           studentMap.set(studentId, {
             id: studentId,
-            name: row[0] ? String(row[0]).trim() : "Unknown Student",
+            name: String(row[0]),
             student_class: sheet.name,
-            parent_number: row[2] ? String(row[2]).trim() : "N/A",
+            parent_number: String(row[2]),
             previous_balance: prev,
             term_3_balance: t3,
             term_1_2026_balance: t1,
-            total_outstanding: prev + t3 + t1
+            total_outstanding: prev + t3 + t1 + t2
           });
         });
       }
-      const masterData = Array.from(studentMap.values());
-      await supabase.from('student_ledger').delete().neq('id', 'temp-init');
-      await supabase.from('student_ledger').insert(masterData);
-      alert(`Sync Complete! Processed ${masterData.length} unique students.`);
-    } catch (err: any) {
-      alert(`Sync Failed: ${err.message}`);
-    } finally {
-      setSyncing(false);
-    }
+      await supabase.from('student_ledger').delete().neq('id', 'init');
+      await supabase.from('student_ledger').insert(Array.from(studentMap.values()));
+      alert("Finance Ledger Synced!");
+    } catch (err: any) { alert(err.message); } finally { setSyncing(false); }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900">
       <nav className="h-20 bg-white border-b flex items-center px-8 justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-           <img src="/logo.png" alt="Logo" className="w-8 h-8" />
-           <span className="font-black italic text-slate-900 tracking-tighter">DETEMA CLOUD</span>
-        </div>
-        <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="text-red-500 font-black text-[10px] uppercase tracking-widest bg-red-50 px-4 py-2 rounded-xl flex items-center gap-2"> <LogOut size={14}/> Log Out</button>
+        <div className="font-black italic text-slate-900 tracking-tighter">DETEMA CLOUD</div>
+        {role === 'student' && (
+          <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl">
+            <TabBtn active={activeTab === 'finance'} label="Fees" icon={<Wallet size={14}/>} onClick={() => setActiveTab('finance')} />
+            <TabBtn active={activeTab === 'results'} label="Results" icon={<GraduationCap size={14}/>} onClick={() => setActiveTab('results')} />
+          </div>
+        )}
+        <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="text-red-500 bg-red-50 p-2 rounded-xl"> <LogOut size={18}/> </button>
       </nav>
 
-      <main className="max-w-6xl mx-auto pt-10 px-6 pb-24 text-slate-900">
+      <main className="max-w-6xl mx-auto pt-10 px-6 pb-24">
         {role === 'admin' ? (
-          <div className="bg-white rounded-[3.5rem] p-12 shadow-xl border border-blue-100">
-             <div className="flex items-center gap-4 mb-8">
-                <div className="p-4 bg-blue-600 rounded-3xl text-white shadow-lg"><ShieldCheck /></div>
-                <div>
-                    <h2 className="text-4xl font-black italic uppercase text-slate-900 leading-none">Database Sync</h2>
-                    <p className="text-slate-400 font-bold italic text-sm mt-1 uppercase">Deduplication: Active</p>
-                </div>
-            </div>
-            <label className="cursor-pointer bg-slate-900 text-white px-12 py-6 rounded-full font-black uppercase tracking-widest text-xs inline-flex items-center gap-3 hover:bg-blue-600 transition-all shadow-xl">
-              <Upload size={18} /> {syncing ? 'Deduplicating & Syncing...' : 'Upload 7-Sheet Excel'}
-              <input type="file" disabled={syncing} className="hidden" accept=".xlsx" onChange={handleUpload} />
-            </label>
+          <div className="grid md:grid-cols-2 gap-8">
+             <AdminBox title="Fee Ledger" desc="7-Sheet Master File Sync" onFile={handleLedgerUpload} loading={syncing} icon={<ShieldCheck/>}/>
+             <AdminBox title="Mark Schedule" desc="Class Subject Marks Sync" onFile={handleMarkUpload} loading={syncing} icon={<ClipboardList/>}/>
           </div>
         ) : (
-          <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
-             {/* Main Balance Header */}
-             <div className="bg-slate-900 rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden">
-                <div className="flex justify-between items-start mb-4 relative z-10">
-                    <p className="text-blue-400 font-black text-[10px] uppercase tracking-[0.3em]">Account Summary</p>
-                    <div className="bg-blue-600 px-6 py-2 rounded-full text-[12px] font-black uppercase italic tracking-widest">{student?.student_class}</div>
-                </div>
-                <h2 className="text-8xl font-black italic mb-8 leading-none tracking-tighter relative z-10">${student?.total_outstanding.toLocaleString()}</h2>
-                <div className="flex flex-wrap gap-4 relative z-10">
-                    <div className="bg-white/10 px-6 py-3 rounded-full flex items-center gap-3 border border-white/10 text-[10px] font-black uppercase italic"><UserCircle2 size={14}/>{student?.name}</div>
-                    <div className="bg-white/10 px-6 py-3 rounded-full flex items-center gap-3 border border-white/10 text-[10px] font-black uppercase italic"><Fingerprint size={14}/>{student?.id}</div>
-                </div>
-                <Wallet size={350} className="absolute -right-24 -bottom-24 opacity-5 rotate-12" />
-             </div>
-
-             <div className="grid lg:grid-cols-3 gap-6">
-                <BalanceBox label="Previous Arrears" val={student?.previous_balance || 0} color="text-red-500" />
-                <BalanceBox label="Term 3 2025" val={student?.term_3_balance || 0} color="text-slate-900" />
-                <BalanceBox label="Term 1 2026 (New)" val={student?.term_1_2026_balance || 0} color="text-blue-600" />
-             </div>
-
-             <div className="grid lg:grid-cols-2 gap-8">
-                {/* Proof of Payment Section */}
-                <div className="bg-blue-600 p-10 rounded-[3rem] text-white shadow-lg">
-                    <div className="flex items-center gap-3 mb-6">
-                        <Camera size={24} />
-                        <h3 className="font-black italic uppercase">Submit Receipt (POP)</h3>
+          <div className="space-y-8 animate-in slide-in-from-bottom-6">
+             {activeTab === 'finance' && (
+                <>
+                  <div className="bg-slate-900 rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden">
+                    <p className="text-blue-400 font-black text-[10px] uppercase tracking-widest mb-2 italic">Current Fee Balance</p>
+                    <h2 className="text-8xl font-black italic mb-8 tracking-tighter">${student?.total_outstanding.toLocaleString()}</h2>
+                    <div className="flex gap-4">
+                        <div className="bg-white/10 px-6 py-3 rounded-full border border-white/10 text-[10px] font-black uppercase italic">{student?.name}</div>
+                        <div className="bg-white/10 px-6 py-3 rounded-full border border-white/10 text-[10px] font-black uppercase italic">{student?.id}</div>
                     </div>
-                    <p className="text-sm font-bold opacity-80 mb-6">Already paid? Upload your receipt photo here to notify the bursar and clear your balance faster.</p>
-                    <label className="cursor-pointer bg-white text-blue-600 px-8 py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 hover:bg-slate-100 transition-all shadow-xl">
-                        <Upload size={16} /> {popUploading ? "Uploading..." : "Upload Receipt"}
-                        <input type="file" accept="image/*" className="hidden" onChange={handlePopUpload} />
-                    </label>
-                </div>
-
-                {/* Important Notices */}
-                <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-lg">
-                    <div className="flex items-center gap-3 mb-6">
-                        <Bell className="text-orange-500" />
-                        <h3 className="font-black italic uppercase text-slate-900">Term 1 Notices</h3>
-                    </div>
-                    <ul className="space-y-4">
-                        <li className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <div className="text-blue-600 font-black italic">01</div>
-                            <p className="text-sm font-bold text-slate-600">School re-opens for Term 1 on Jan 13th, 2026.</p>
-                        </li>
-                        <li className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <div className="text-blue-600 font-black italic">02</div>
-                            <p className="text-sm font-bold text-slate-600">Please settle Term 1 fees to ensure early registration.</p>
-                        </li>
-                    </ul>
-                </div>
-             </div>
-             
-             {/* Payment Channels */}
-             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-lg mt-8">
-                <div className="flex items-center gap-3 mb-8">
-                    <CreditCard className="text-blue-600" />
-                    <h3 className="font-black italic uppercase text-slate-900">Payment Channels</h3>
-                </div>
-                <div className="grid md:grid-cols-2 gap-6">
-                    <div className="p-6 bg-slate-50 rounded-3xl flex items-center gap-6">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm"><img src="/bankabc.webp" className="w-10" alt="Bank" /></div>
-                        <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase italic">BankABC (USD)</p>
-                            <p className="font-black text-slate-800">Branch: 1092 / Acc: 827419XXX</p>
+                  </div>
+                  <div className="grid lg:grid-cols-4 gap-6">
+                    <BalanceBox label="Arrears" val={student?.previous_balance || 0} color="text-red-500" />
+                    <BalanceBox label="Term 3 2025" val={student?.term_3_balance || 0} color="text-slate-400" />
+                    <BalanceBox label="Term 1 2026" val={student?.term_1_2026_balance || 0} color="text-blue-600" />
+                    {isAfterClosing && <BalanceBox label="Term 2 2026" val={TERM_2_FEE} color="text-orange-500" />}
+                  </div>
+                  <div className="p-10 bg-white rounded-[3rem] border border-slate-100 shadow-xl">
+                    <h3 className="font-black italic uppercase mb-6 flex items-center gap-2"><CreditCard className="text-blue-600"/> Payment Channels</h3>
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="p-6 bg-slate-50 rounded-3xl">
+                            <p className="text-[10px] font-black text-slate-400 uppercase">BankABC USD</p>
+                            <p className="font-black text-slate-800">8274191020210 (Heritage Branch)</p>
+                        </div>
+                        <div className="p-6 bg-slate-50 rounded-3xl">
+                            <p className="text-[10px] font-black text-slate-400 uppercase">Ecocash Merchant</p>
+                            <p className="font-black text-slate-800">*151*2*2*152643# (Ref: {student?.id})</p>
                         </div>
                     </div>
-                    <div className="p-6 bg-slate-50 rounded-3xl flex items-center gap-6">
-                        <div className="bg-white p-4 rounded-2xl shadow-sm"><img src="/ecocash.webp" className="w-10" alt="Ecocash" /></div>
-                        <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase italic">Ecocash USD</p>
-                            <p className="font-black text-slate-800">Merchant Code: *151*2*2*152643#</p>
-                        </div>
-                    </div>
-                </div>
-             </div>
+                  </div>
+                </>
+             )}
 
-             <div className="flex justify-center pt-8">
-                <div className="flex items-center gap-2 text-slate-400 font-bold italic text-xs uppercase tracking-widest">
-                    <HelpCircle size={14}/> Support: +263 77X XXX XXX (Bursar)
-                </div>
-             </div>
+             {activeTab === 'results' && (
+               <div className="space-y-6">
+                  {!hasReportAccess ? (
+                    <div className="bg-white rounded-[3.5rem] p-16 shadow-xl border border-red-100 text-center flex flex-col items-center">
+                        <div className="bg-red-50 p-6 rounded-full text-red-500 mb-6"><Lock size={48}/></div>
+                        <h2 className="text-3xl font-black italic uppercase text-slate-900 leading-tight">Access Restricted</h2>
+                        <p className="text-slate-400 font-bold italic mt-4 max-w-md">Your current balance of ${reportDebt} exceeds the $30 limit. Please clear your fees to view the report.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-[3.5rem] p-12 border border-slate-100 shadow-xl">
+                        <div className="flex justify-between items-center mb-10">
+                            <h3 className="text-4xl font-black italic uppercase text-slate-900">Academic Report</h3>
+                            <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 py-2 rounded-full font-black text-[10px] uppercase italic"><CheckCircle2 size={14}/> Settle</div>
+                        </div>
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="text-[10px] font-black uppercase text-slate-400 border-b border-slate-50">
+                                    <th className="pb-4">Subject</th>
+                                    <th className="pb-4 text-center">Mark</th>
+                                    <th className="pb-4 text-right">Grade</th>
+                                </tr>
+                            </thead>
+                            <tbody className="font-bold">
+                                {marks.length > 0 ? marks.map((m, i) => (
+                                    <tr key={i} className="border-b border-slate-50">
+                                        <td className="py-5 italic uppercase text-slate-900">{m.subject}</td>
+                                        <td className="py-5 text-center text-slate-500">{m.mark}%</td>
+                                        <td className={`py-5 text-right font-black ${m.grade === 'U' ? 'text-red-500' : 'text-blue-600'}`}>{m.grade}</td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={3} className="py-20 text-center text-slate-400 italic">Marks not yet uploaded by teachers.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                  )}
+               </div>
+             )}
           </div>
         )}
       </main>
@@ -258,10 +274,32 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
   );
 }
 
-function BalanceBox({ label, val, color }: { label: string, val: number, color: string }) {
+function AdminBox({ title, desc, onFile, loading, icon }: any) {
+  return (
+    <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl">
+        <div className="p-4 bg-blue-50 w-fit rounded-2xl mb-6 text-blue-600">{icon}</div>
+        <h3 className="text-2xl font-black italic uppercase text-slate-900 mb-2">{title}</h3>
+        <p className="text-xs font-bold text-slate-400 mb-8 uppercase italic">{desc}</p>
+        <label className="cursor-pointer bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center gap-3 w-fit hover:bg-blue-600 transition-all">
+            <Upload size={16}/> {loading ? 'Processing...' : 'Upload File'}
+            <input type="file" className="hidden" accept=".xlsx" onChange={onFile} disabled={loading} />
+        </label>
+    </div>
+  );
+}
+
+function TabBtn({ active, label, icon, onClick }: any) {
+  return (
+    <button onClick={onClick} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+      {icon} <span className="hidden md:inline">{label}</span>
+    </button>
+  );
+}
+
+function BalanceBox({ label, val, color }: any) {
     return (
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic mb-2">{label}</p>
+            <p className="text-[10px] font-black uppercase text-slate-400 italic mb-2 tracking-widest">{label}</p>
             <p className={`text-3xl font-black italic ${color}`}>${val.toLocaleString()}</p>
         </div>
     );
@@ -273,7 +311,7 @@ export default function Portal() {
     const saved = localStorage.getItem('portalSession');
     if (saved) setSession(JSON.parse(saved));
   }, []);
-  if (!supabase) return <div className="h-screen flex items-center justify-center font-black italic uppercase">Config Missing</div>;
+  if (!supabase) return <div className="h-screen flex items-center justify-center font-black">DATABASE CONNECTION ERROR</div>;
   if (!session) return <AuthPage onLogin={(role, student) => {
     const s = { role, student };
     setSession(s);
