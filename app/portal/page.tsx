@@ -12,14 +12,14 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
-const ADMIN_USER = process.env.NEXT_PUBLIC_ADMIN_USERNAME || 'admin'; 
-const ADMIN_PASS = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'DeteMa_1984';
+// SECURE CREDENTIALS: Now pulled from your .env.local or Vercel Settings
+const ADMIN_USER = process.env.NEXT_PUBLIC_ADMIN_USERNAME; 
+const ADMIN_PASS = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
 
-// BUSINESS LOGIC CONFIGURATION
 const TERM_1_FEE = 70;
 const TERM_2_FEE = 70;
 const CLOSING_DATE = new Date('2026-04-02');
-const REPORT_ACCESS_THRESHOLD = 30; // Students owing >= $30 cannot see reports
+const REPORT_ACCESS_THRESHOLD = 30;
 
 interface StudentRecord {
   id: string;
@@ -48,9 +48,14 @@ function AuthPage({ onLogin }: { onLogin: (role: 'admin' | 'student', student: S
     e.preventDefault();
     if (!supabase) return;
     setLoading(true);
+    
     if (isAdmin) {
-      if (loginId === ADMIN_USER && password === ADMIN_PASS) onLogin('admin', null);
-      else alert("Unauthorized Admin Access");
+      // Logic check using environment variables
+      if (loginId === ADMIN_USER && password === ADMIN_PASS) {
+        onLogin('admin', null);
+      } else {
+        alert("Invalid Admin Credentials");
+      }
     } else {
       const { data } = await supabase.from('student_ledger').select('*').eq('id', loginId.toUpperCase().trim()).single();
       if (data) onLogin('student', data as StudentRecord);
@@ -60,23 +65,23 @@ function AuthPage({ onLogin }: { onLogin: (role: 'admin' | 'student', student: S
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row font-sans text-slate-900">
       <div className="lg:w-1/2 bg-slate-900 p-12 lg:p-24 text-white flex flex-col justify-between relative overflow-hidden">
         <div className="relative z-10">
           <img src="/logo.png" alt="Logo" className="w-24 h-24 mb-12" />
           <h1 className="text-7xl font-black italic leading-[0.8] uppercase tracking-tighter mb-6">Detema<br/><span className="text-blue-500">Cloud</span></h1>
-          <p className="text-slate-400 font-bold italic mb-12 uppercase tracking-widest text-xs tracking-widest">Official School Portal</p>
+          <p className="text-slate-400 font-bold italic mb-12 uppercase tracking-widest text-xs">Secure Administration</p>
         </div>
       </div>
       <div className="lg:w-1/2 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-md space-y-8">
-          <h2 className="text-4xl font-black italic uppercase text-slate-900">{isAdmin ? 'Staff Portal' : 'Student Login'}</h2>
-          <form onSubmit={handleLogin} className="space-y-4 text-slate-900">
+          <h2 className="text-4xl font-black italic uppercase">{isAdmin ? 'Staff Portal' : 'Student Login'}</h2>
+          <form onSubmit={handleLogin} className="space-y-4">
             <input type="text" placeholder="ID Number" className="w-full px-8 py-5 rounded-[2rem] bg-slate-50 border border-slate-100 font-black" onChange={(e) => setLoginId(e.target.value)} />
             <input type="password" placeholder="Password" className="w-full px-8 py-5 rounded-[2rem] bg-slate-50 border border-slate-100 font-black" onChange={(e) => setPassword(e.target.value)} />
-            <button className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl">{loading ? "Authenticating..." : "Access Portal"}</button>
+            <button className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl">{loading ? "Verifying..." : "Enter"}</button>
           </form>
-          <button onClick={() => setIsAdmin(!isAdmin)} className="w-full text-[10px] font-black text-blue-600 uppercase italic underline underline-offset-4 decoration-2">{isAdmin ? "Student View" : "Bursar/Staff Terminal"}</button>
+          <button onClick={() => setIsAdmin(!isAdmin)} className="w-full text-[10px] font-black text-blue-600 uppercase italic underline underline-offset-4 decoration-2">{isAdmin ? "Switch to Student" : "Bursar Terminal"}</button>
         </div>
       </div>
     </div>
@@ -90,8 +95,6 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
 
   const today = new Date();
   const isAfterClosing = today >= CLOSING_DATE;
-  
-  // Calculate debt for reporting restriction (Excluding potential future term fees)
   const reportDebt = (student?.previous_balance || 0) + (student?.term_3_balance || 0) + (student?.term_1_2026_balance || 0);
   const hasReportAccess = reportDebt < REPORT_ACCESS_THRESHOLD;
 
@@ -113,17 +116,16 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
     setSyncing(true);
     try {
       const rows = await readXlsxFile(file);
-      const headers = rows[2] as string[]; // Based on "MARK SCHEDULE TEMPLATE" Row 3
+      const headers = rows[2] as string[];
       const dataRows = rows.slice(3);
       const allMarks: any[] = [];
-      
       dataRows.forEach((row: any) => {
-        if (!row[1]) return; // Skip empty names
+        if (!row[1]) return;
         for (let i = 3; i < headers.length; i++) {
           if (headers[i] && !['GRAND TOTAL', 'POSITION'].includes(headers[i])) {
             const val = Number(row[i]) || 0;
             allMarks.push({
-              student_id: row[0], // Using "No." column as temporary link
+              student_id: row[0],
               student_name: row[1],
               subject: headers[i],
               mark: val,
@@ -134,7 +136,7 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
       });
       await supabase.from('student_marks').delete().neq('student_id', 'init');
       await supabase.from('student_marks').insert(allMarks);
-      alert("Academic marks updated!");
+      alert("Marks Uploaded!");
     } catch (err: any) { alert(err.message); } finally { setSyncing(false); }
   };
 
@@ -152,12 +154,10 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
           const studentId = row[1] ? String(row[1]).trim().toUpperCase() : '';
           const enrollmentYear = studentId.substring(0, 4);
           if (!['2023', '2024', '2025', '2026'].includes(enrollmentYear)) return;
-          
           const prev = Number(row[3]) || 0;
           const t3 = Number(row[4]) || 0;
           const t1 = TERM_1_FEE;
           const t2 = isAfterClosing ? TERM_2_FEE : 0;
-
           studentMap.set(studentId, {
             id: studentId,
             name: String(row[0]),
@@ -172,12 +172,12 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
       }
       await supabase.from('student_ledger').delete().neq('id', 'init');
       await supabase.from('student_ledger').insert(Array.from(studentMap.values()));
-      alert("Finance Ledger Synced!");
+      alert("Ledger Updated!");
     } catch (err: any) { alert(err.message); } finally { setSyncing(false); }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900">
+    <div className="min-h-screen bg-[#F8FAFC]">
       <nav className="h-20 bg-white border-b flex items-center px-8 justify-between sticky top-0 z-50">
         <div className="font-black italic text-slate-900 tracking-tighter">DETEMA CLOUD</div>
         {role === 'student' && (
@@ -192,8 +192,8 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
       <main className="max-w-6xl mx-auto pt-10 px-6 pb-24">
         {role === 'admin' ? (
           <div className="grid md:grid-cols-2 gap-8">
-             <AdminBox title="Fee Ledger" desc="7-Sheet Master File Sync" onFile={handleLedgerUpload} loading={syncing} icon={<ShieldCheck/>}/>
-             <AdminBox title="Mark Schedule" desc="Class Subject Marks Sync" onFile={handleMarkUpload} loading={syncing} icon={<ClipboardList/>}/>
+             <AdminBox title="Fee Ledger" desc="Financial Master Sync" onFile={handleLedgerUpload} loading={syncing} icon={<ShieldCheck/>}/>
+             <AdminBox title="Mark Schedule" desc="Academic Results Sync" onFile={handleMarkUpload} loading={syncing} icon={<ClipboardList/>}/>
           </div>
         ) : (
           <div className="space-y-8 animate-in slide-in-from-bottom-6">
@@ -212,19 +212,6 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
                     <BalanceBox label="Term 3 2025" val={student?.term_3_balance || 0} color="text-slate-400" />
                     <BalanceBox label="Term 1 2026" val={student?.term_1_2026_balance || 0} color="text-blue-600" />
                     {isAfterClosing && <BalanceBox label="Term 2 2026" val={TERM_2_FEE} color="text-orange-500" />}
-                  </div>
-                  <div className="p-10 bg-white rounded-[3rem] border border-slate-100 shadow-xl">
-                    <h3 className="font-black italic uppercase mb-6 flex items-center gap-2"><CreditCard className="text-blue-600"/> Payment Channels</h3>
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div className="p-6 bg-slate-50 rounded-3xl">
-                            <p className="text-[10px] font-black text-slate-400 uppercase">BankABC USD</p>
-                            <p className="font-black text-slate-800">8274191020210 (Heritage Branch)</p>
-                        </div>
-                        <div className="p-6 bg-slate-50 rounded-3xl">
-                            <p className="text-[10px] font-black text-slate-400 uppercase">Ecocash Merchant</p>
-                            <p className="font-black text-slate-800">*151*2*2*152643# (Ref: {student?.id})</p>
-                        </div>
-                    </div>
                   </div>
                 </>
              )}
@@ -251,15 +238,15 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
                                     <th className="pb-4 text-right">Grade</th>
                                 </tr>
                             </thead>
-                            <tbody className="font-bold">
+                            <tbody className="font-bold text-slate-900">
                                 {marks.length > 0 ? marks.map((m, i) => (
                                     <tr key={i} className="border-b border-slate-50">
-                                        <td className="py-5 italic uppercase text-slate-900">{m.subject}</td>
+                                        <td className="py-5 italic uppercase">{m.subject}</td>
                                         <td className="py-5 text-center text-slate-500">{m.mark}%</td>
                                         <td className={`py-5 text-right font-black ${m.grade === 'U' ? 'text-red-500' : 'text-blue-600'}`}>{m.grade}</td>
                                     </tr>
                                 )) : (
-                                    <tr><td colSpan={3} className="py-20 text-center text-slate-400 italic">Marks not yet uploaded by teachers.</td></tr>
+                                    <tr><td colSpan={3} className="py-20 text-center text-slate-400 italic">Marks not yet uploaded.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -276,9 +263,9 @@ function Dashboard({ role, student }: { role: 'admin' | 'student', student: Stud
 
 function AdminBox({ title, desc, onFile, loading, icon }: any) {
   return (
-    <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl">
+    <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl text-slate-900">
         <div className="p-4 bg-blue-50 w-fit rounded-2xl mb-6 text-blue-600">{icon}</div>
-        <h3 className="text-2xl font-black italic uppercase text-slate-900 mb-2">{title}</h3>
+        <h3 className="text-2xl font-black italic uppercase mb-2">{title}</h3>
         <p className="text-xs font-bold text-slate-400 mb-8 uppercase italic">{desc}</p>
         <label className="cursor-pointer bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center gap-3 w-fit hover:bg-blue-600 transition-all">
             <Upload size={16}/> {loading ? 'Processing...' : 'Upload File'}
