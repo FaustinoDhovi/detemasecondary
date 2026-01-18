@@ -1,60 +1,73 @@
 "use client";
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { Calendar, Clock, MapPin } from 'lucide-react';
 
-import { Clock, MapPin, Calendar as CalendarIcon } from 'lucide-react';
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
 export default function TimetablePage() {
-  const schedule = [
-    { time: "08:00 - 09:00", subject: "Mathematics", room: "Lab 2", tutor: "Mr. Phiri" },
-    { time: "09:00 - 10:00", subject: "English", room: "Room 4A", tutor: "Mrs. Moyo" },
-    { time: "10:30 - 11:30", subject: "Physics", room: "Lab 1", tutor: "Mr. Dube" },
-    { time: "11:30 - 12:30", subject: "History", room: "Room 2", tutor: "Ms. Sibanda" },
-  ];
+  const [schedule, setSchedule] = useState<any>([]);
+  const [student, setStudent] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
+  useEffect(() => {
+    const session = JSON.parse(localStorage.getItem('portalSession') || '{}');
+    const s = session.student;
+    setStudent(s);
+    if (s?.student_class) {
+      fetchTimetable(s.student_class);
+    }
+  }, []);
+
+  async function fetchTimetable(studentClass: string) {
+    const { data } = await supabase
+      .from('timetables')
+      .select('*')
+      .eq('target_class', studentClass)
+      .order('start_time', { ascending: true });
+    
+    if (data) setSchedule(data);
+    setLoading(false);
+  }
+
+  if (loading) return <div className="p-20 text-center font-black italic text-slate-400 animate-pulse uppercase">Syncing Weekly Schedule...</div>;
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Timetable</h1>
-          <p className="text-slate-500 font-medium">Monday, Jan 19, 2026</p>
-        </div>
-        <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
-           <button className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold uppercase tracking-widest">Today</button>
-           <button className="px-4 py-2 text-slate-400 text-xs font-bold uppercase tracking-widest">Week</button>
-        </div>
+    <div className="space-y-10 animate-in fade-in duration-700">
+      <div>
+        <h1 className="text-4xl font-black text-slate-900 italic uppercase tracking-tighter">School Timetable</h1>
+        <p className="text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mt-2">Viewing: {student?.student_class}</p>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <tr>
-                <th className="px-8 py-5">Time</th>
-                <th className="px-8 py-5">Subject / Tutor</th>
-                <th className="px-8 py-5">Location</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 font-medium">
-              {schedule.map((item, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-2 text-slate-900 font-black text-sm">
-                      <Clock size={14} className="text-blue-600" /> {item.time}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {days.map((day) => (
+          <div key={day} className="space-y-4">
+            <div className="bg-slate-900 text-white p-4 rounded-2xl text-center shadow-lg">
+              <p className="text-[10px] font-black uppercase tracking-widest italic">{day}</p>
+            </div>
+            
+            <div className="space-y-3">
+              {schedule.filter((item: any) => item.day === day).map((slot: any, idx: number) => (
+                <div key={idx} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm hover:border-blue-500 transition-all">
+                  <p className="text-[10px] font-black text-blue-600 uppercase mb-1">{slot.subject}</p>
+                  <p className="font-bold text-slate-900 leading-tight">{slot.topic || 'Regular Lesson'}</p>
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase">
+                      <Clock size={10} /> {slot.start_time} - {slot.end_time}
                     </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <p className="text-sm text-slate-900 font-bold">{item.subject}</p>
-                    <p className="text-[10px] text-slate-400 uppercase">{item.tutor}</p>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-2 text-xs text-slate-500 font-bold">
-                      <MapPin size={14} /> {item.room}
-                    </div>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+              {schedule.filter((item: any) => item.day === day).length === 0 && (
+                <div className="h-24 rounded-[2rem] border border-dashed border-slate-100 flex items-center justify-center">
+                  <span className="text-[9px] font-black text-slate-300 uppercase italic">No Lessons</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

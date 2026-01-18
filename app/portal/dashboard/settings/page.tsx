@@ -1,26 +1,32 @@
 "use client";
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  User, 
-  Lock, 
-  Bell, 
-  Shield, 
-  Smartphone, 
-  Mail, 
-  Save, 
-  Camera,
-  Eye,
-  EyeOff
+  User, Lock, Bell, Shield, Smartphone, Mail, 
+  Save, Camera, Eye, EyeOff, GraduationCap 
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [student, setStudent] = useState<any>(null);
+
+  useEffect(() => {
+    const session = localStorage.getItem('portalSession');
+    if (session) {
+      setStudent(JSON.parse(session).student);
+    }
+  }, []);
+
+  if (!student) return null;
+
+  // --- LOGIC ---
+  const idYear = parseInt(student.id.toString().substring(0, 4));
+  const isEnrolled = idYear >= 2023 && idYear <= 2026;
+  const completionYear = idYear + 3;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Account Settings</h1>
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight italic uppercase">Account Settings</h1>
         <p className="text-slate-500 font-medium">Manage your profile, security, and notification preferences</p>
       </div>
 
@@ -33,25 +39,34 @@ export default function SettingsPage() {
           <div className="p-8 space-y-8">
             <div className="flex flex-col sm:flex-row items-center gap-6">
               <div className="relative group">
-                <div className="w-24 h-24 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-2xl font-black shadow-xl shadow-blue-100">
-                  TM
+                <div className="w-24 h-24 rounded-3xl bg-slate-900 flex items-center justify-center text-blue-400 text-2xl font-black shadow-xl">
+                  {student.name.substring(0, 2).toUpperCase()}
                 </div>
                 <button className="absolute -bottom-2 -right-2 p-2 bg-white border border-slate-100 rounded-xl shadow-lg text-blue-600 hover:scale-110 transition-transform">
                   <Camera size={16} />
                 </button>
               </div>
               <div className="text-center sm:text-left">
-                <h3 className="font-black text-slate-900 text-xl">Tendai Moyo</h3>
-                <p className="text-sm font-bold text-slate-400">Student ID: DET-2026-0442</p>
-                <p className="text-xs font-black text-blue-600 uppercase mt-1 tracking-widest">Form 4-A</p>
+                <h3 className="font-black text-slate-900 text-xl italic uppercase">{student.name}</h3>
+                <p className="text-sm font-bold text-slate-400 uppercase">Candidate ID: {student.id}</p>
+                
+                {isEnrolled ? (
+                  <p className="text-[10px] font-black text-blue-600 uppercase mt-1 tracking-widest bg-blue-50 px-3 py-1 rounded-full inline-block">
+                    {student.student_class}
+                  </p>
+                ) : (
+                  <p className="text-[10px] font-black text-slate-500 uppercase mt-1 tracking-widest bg-slate-100 px-3 py-1 rounded-full inline-block flex items-center gap-1">
+                    <GraduationCap size={12} /> Completed Form 4 in {completionYear}
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-6">
-              <InputGroup label="Full Name" value="Tendai Moyo" disabled />
-              <InputGroup label="Email Address" value="tendai.moyo@student.ac.zw" />
-              <InputGroup label="Phone Number" value="+263 77 000 0000" />
-              <InputGroup label="Date of Birth" value="12 June 2008" disabled />
+              <InputGroup label="Full Name" value={student.name} disabled />
+              <InputGroup label="Email Address" placeholder="Enter student email" />
+              <InputGroup label="Phone Number" placeholder="+263 ..." />
+              <InputGroup label="Academic Status" value={isEnrolled ? "Currently Enrolled" : `Alumni (${completionYear})`} disabled />
             </div>
           </div>
         </section>
@@ -82,13 +97,10 @@ export default function SettingsPage() {
               <InputGroup label="New Password" type="password" placeholder="Min. 8 characters" />
               <InputGroup label="Confirm New Password" type="password" placeholder="Repeat password" />
             </div>
-            <button className="flex items-center gap-2 text-xs font-black text-blue-600 uppercase tracking-widest hover:underline">
-              <Shield size={14} /> Enable Two-Factor Authentication (2FA)
-            </button>
           </div>
         </section>
 
-        {/* Notifications Section */}
+        {/* Notifications */}
         <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
           <div className="p-8 border-b border-slate-50 flex items-center gap-2 font-black text-slate-900 uppercase text-sm tracking-tight">
             <Bell size={18} className="text-blue-600" /> Notification Preferences
@@ -111,8 +123,8 @@ export default function SettingsPage() {
 
         {/* Save Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between p-8 bg-slate-900 rounded-[2rem] text-white">
-          <p className="text-xs font-bold text-slate-400 mb-4 sm:mb-0 italic">Last profile update: 2 days ago</p>
-          <button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-xl shadow-blue-900/40">
+          <p className="text-xs font-bold text-slate-400 mb-4 sm:mb-0 italic">Profile management secured by Student ID verification.</p>
+          <button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-xl">
             <Save size={18} /> Save Changes
           </button>
         </div>
@@ -121,7 +133,6 @@ export default function SettingsPage() {
   );
 }
 
-// Helper Components
 function InputGroup({ label, value, type = "text", placeholder, disabled }: any) {
   return (
     <div className="space-y-2">

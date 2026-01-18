@@ -1,57 +1,73 @@
 "use client";
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { FileText, Clock, Calendar, UploadCloud, AlertCircle } from 'lucide-react';
 
-import { FileText, Clock, CheckCircle2, AlertCircle, Calendar } from 'lucide-react';
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
 export default function AssignmentsPage() {
-  const tasks = [
-    { subject: "Mathematics", title: "Quadratic Equations Set B", due: "Tomorrow", status: "Pending", priority: "High" },
-    { subject: "History", title: "The Great Depression Essay", due: "Jan 25", status: "Submitted", priority: "Medium" },
-    { subject: "Physics", title: "Thermodynamics Lab Report", due: "Feb 02", status: "Pending", priority: "Low" },
-  ];
+  const [tasks, setTasks] = useState([]);
+  const [student, setStudent] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const session = JSON.parse(localStorage.getItem('portalSession') || '{}');
+    const s = session.student;
+    setStudent(s);
+    if (s?.student_class) {
+      fetchAssignments(s.student_class);
+    }
+  }, []);
+
+  async function fetchAssignments(studentClass: string) {
+    const { data, error } = await supabase
+      .from('assignments')
+      .select('*')
+      .eq('target_class', studentClass)
+      .order('due_date', { ascending: true });
+    
+    if (data) setTasks(data as any);
+    setLoading(false);
+  }
+
+  if (loading) return <div className="p-20 text-center font-black italic text-slate-400 animate-pulse uppercase">Syncing Class Tasks...</div>;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Assignments</h1>
-        <p className="text-slate-500 font-medium">Track your upcoming tasks and submissions</p>
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900 italic uppercase tracking-tighter">Assignments</h1>
+          <p className="text-blue-600 font-black text-[10px] uppercase tracking-[0.3em] mt-2">Class: {student?.student_class}</p>
+        </div>
       </div>
 
       <div className="grid gap-4">
-        {tasks.map((task, i) => (
-          <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-blue-200 transition-all">
-            <div className="flex items-start gap-4">
-              <div className={`p-4 rounded-2xl ${task.status === 'Submitted' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>
-                <FileText size={24} />
+        {tasks.map((task: any, i) => (
+          <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-blue-500 transition-all group">
+            <div className="flex items-start gap-6">
+              <div className="p-5 rounded-3xl bg-slate-50 text-slate-900 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <FileText size={28} />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">{task.subject}</p>
-                <h3 className="font-bold text-slate-900 text-lg">{task.title}</h3>
-                <div className="flex items-center gap-3 mt-1">
+                <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest mb-1">{task.subject}</p>
+                <h3 className="font-black text-slate-900 text-xl italic uppercase tracking-tight">{task.title}</h3>
+                <div className="flex items-center gap-4 mt-2">
                    <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase">
-                     <Calendar size={12} /> Due: {task.due}
-                   </span>
-                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${
-                     task.priority === 'High' ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'
-                   }`}>
-                     {task.priority} Priority
+                     <Clock size={12} /> Deadline: {task.due_date}
                    </span>
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center gap-3">
-              {task.status === 'Submitted' ? (
-                <div className="flex items-center gap-2 text-green-600 font-black text-xs uppercase">
-                  <CheckCircle2 size={16} /> Submitted
-                </div>
-              ) : (
-                <button className="w-full sm:w-auto bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-all">
-                  Upload Work
-                </button>
-              )}
-            </div>
+            <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+              <UploadCloud size={16} /> Upload Work
+            </button>
           </div>
         ))}
+        {tasks.length === 0 && (
+          <div className="p-20 text-center border-2 border-dashed border-slate-100 rounded-[3rem]">
+            <p className="text-slate-400 font-black italic uppercase text-xs">No assignments uploaded by teachers yet</p>
+          </div>
+        )}
       </div>
     </div>
   );
