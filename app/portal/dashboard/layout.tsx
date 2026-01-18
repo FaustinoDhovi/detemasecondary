@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = 'force-dynamic'; // <--- ADD THIS LINE HERE
 import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
@@ -7,8 +8,7 @@ import {
   Calendar, 
   Settings, 
   LogOut, 
-  UserCircle,
-  Menu,
+  Menu, 
   X
 } from 'lucide-react';
 import Link from 'next/link';
@@ -32,7 +32,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Reports', href: '/portal/dashboard/grades', icon: BookOpen },
     { name: 'Timetable', href: '/portal/dashboard/timetable', icon: Calendar },
     { name: 'Assignments', href: '/portal/dashboard/assignments', icon: BookOpen },
-    { name: 'Settings', href: '/portal/dashboard/settings', icon: Settings }, // Added Settings Icon Here
+    { name: 'Settings', href: '/portal/dashboard/settings', icon: Settings },
   ];
 
   const handleLogout = () => {
@@ -40,15 +40,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     window.location.href = '/portal';
   };
 
-  if (!student) return null;
+  if (!student) return <div className="p-20 text-center font-black animate-pulse">LOADING PROFILE...</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-      {/* Sidebar */}
-      <aside className={`fixed md:relative z-50 w-72 h-screen bg-slate-900 text-white p-8 flex flex-col transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-[70] w-72 bg-slate-900 text-white p-8 flex flex-col transition-transform duration-300 ease-in-out
+        md:relative md:translate-x-0
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         <div className="mb-12">
-          <h2 className="text-3xl font-black italic uppercase tracking-tighter">Detema<span className="text-blue-500">.</span></h2>
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Student Portal</p>
+          <h1 className="text-2xl font-black italic uppercase tracking-tighter">
+            Detema<span className="text-blue-500">Cloud</span>
+          </h1>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Student Portal</p>
         </div>
 
         <nav className="flex-1 space-y-2">
@@ -58,21 +72,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
-                  isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
+                // FIX: Collapse sidebar when link is clicked
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`
+                  flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all
+                  ${isActive 
+                    ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' 
+                    : 'text-slate-400 hover:bg-white/5 hover:text-white'}
+                `}
               >
-                <item.icon size={18} />
+                <item.icon size={20} />
                 {item.name}
               </Link>
             );
           })}
         </nav>
 
-        {/* Dynamic Student Profile in Sidebar */}
+        {/* User Profile Footer */}
         <div className="mt-auto pt-8 border-t border-white/5 space-y-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-blue-400 font-black">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-xl italic">
               {student.name.substring(0, 1)}
             </div>
             <div className="overflow-hidden">
@@ -92,18 +111,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 p-6 md:p-12 overflow-y-auto max-h-screen">
-        {/* Mobile Toggle */}
+      <main className="flex-1 p-6 md:p-12 overflow-y-auto max-h-screen relative">
+        {/* Mobile Toggle Button */}
         <button 
-          className="md:hidden mb-6 p-4 bg-white rounded-2xl shadow-sm text-slate-900"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          onClick={() => setIsMobileMenuOpen(true)}
+          className={`
+            md:hidden fixed bottom-6 right-6 p-4 bg-slate-900 text-white rounded-full shadow-2xl z-[50] transition-transform
+            ${isMobileMenuOpen ? 'scale-0' : 'scale-100'}
+          `}
         >
-          {isMobileMenuOpen ? <X /> : <Menu />}
+          <Menu size={24} />
         </button>
 
-        <div className="max-w-6xl mx-auto">
-          {children}
-        </div>
+        {/* Close Button (Visible only when menu is open) */}
+        {isMobileMenuOpen && (
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="md:hidden fixed top-6 right-6 p-4 bg-white text-slate-900 rounded-2xl shadow-xl z-[80]"
+          >
+            <X size={24} />
+          </button>
+        )}
+
+        {children}
       </main>
     </div>
   );
