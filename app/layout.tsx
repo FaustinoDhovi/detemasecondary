@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Apex Academy | Excellence in Education",
+  title: "Detema Seconday School| Excellence in Education",
   description: "Shaping future leaders through innovative education and character development",
   icons: {
     icon: "/favicon.ico",
