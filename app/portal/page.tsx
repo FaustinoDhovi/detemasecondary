@@ -1,251 +1,404 @@
+// app/portal/page.tsx - UPDATED WITH BETTER DEBUGGING
 "use client";
-export const dynamic = 'force-dynamic';
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import readXlsxFile from 'read-excel-file';
-import { 
-  Upload, ClipboardList, Wallet, Loader2, CheckCircle2, 
-  Users, Search, DollarSign, ShieldAlert, FileText, UserCheck, XCircle, LogOut 
-} from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { useRouter } from 'next/navigation';
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import {
+  GraduationCap,
+  Lock,
+  Eye,
+  EyeOff,
+  Sparkles,
+  AlertCircle,
+  ArrowRight,
+  Shield,
+  Loader2,
+  CheckCircle2,
+  Building,
+  ArrowLeft,
+} from "lucide-react";
+import Link from "next/link";
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '', 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const SCHOOL_LOGO_BASE64 = "PASTE_YOUR_BASE64_CODE_HERE";
-
-export default function AdminPage() {
-  const [students, setStudents] = useState<any[]>([]);
-  const [pendingStaff, setPendingStaff] = useState<any[]>([]);
-  const [view, setView] = useState<'finance' | 'staff'>('finance');
-  const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState<string | null>(null);
-  const [status, setStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
+function StealthPortalLogin() {
   const router = useRouter();
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  async function fetchData() {
-    const { data: stdData } = await supabase.from('student_ledger').select('*').order('name', { ascending: true });
-    if (stdData) setStudents(stdData);
+  const [name, setName] = useState("");
+  const [id, setId] = useState("");
 
-    const { data: stfData } = await supabase.from('staff_profiles').select('*').eq('is_approved', false);
-    if (stfData) setPendingStaff(stfData);
-  }
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
 
-  // --- HELPER TO CALCULATE/FORMAT BALANCE ---
-  const getBalanceInfo = (s: any) => {
-    const prev = s.previous_balance?.toString() || "0";
-    const curr = s.term_1_2026?.toString() || "0";
-    
-    // If either column contains text (BEAM, SOLON), return the text
-    if (isNaN(Number(prev)) && prev !== "0") return { value: prev, isNumeric: false };
-    if (isNaN(Number(curr)) && curr !== "0") return { value: curr, isNumeric: false };
-    
-    const total = (Number(prev) || 0) + (Number(curr) || 0);
-    return { value: total, isNumeric: true };
-  };
+    setLoading(true);
+    setError("");
 
-  const stats = students.reduce((acc, s) => {
-    const info = getBalanceInfo(s);
-    if (info.isNumeric) {
-      acc.totalOwed += (info.value as number);
-      if ((info.value as number) > 50) acc.lockedCount += 1;
-    }
-    return acc;
-  }, { totalOwed: 0, lockedCount: 0 });
-
-  const filteredStudents = students.filter(s => 
-    s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.id?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleFinanceUpload = async (e: any) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setLoading('finance');
     try {
-      const sheets = await (readXlsxFile as any)(file, { getSheets: true });
-      for (const sheet of sheets) {
-        const rows = await readXlsxFile(file, { sheet: sheet.name });
-        // Find header row containing "STUDENT NUMBER"
-        const hIdx = rows.findIndex(r => r.some(c => c?.toString().toUpperCase().includes("STUDENT NUMBER")));
-        if (hIdx === -1) continue;
+      const cleanName = name.trim().toLowerCase();
+      const cleanId = id.trim();
 
-        const headers = rows[hIdx].map(h => h?.toString().toUpperCase().trim() || "");
-        const dataRows = rows.slice(hIdx + 1);
+      console.log("=== LOGIN ATTEMPT START ===");
+      console.log("Email:", cleanName);
+      console.log("Password length:", cleanId.length);
 
-        const batch = dataRows.map(row => {
-          const get = (keys: string[]) => {
-            const i = headers.findIndex(h => keys.some(k => h.includes(k)));
-            return i !== -1 ? row[i]?.toString().trim() : "0";
-          };
+      /* =======================
+         1️⃣ ADMIN OVERRIDE
+      ======================== */
+      const adminUsername = process.env.NEXT_PUBLIC_ADMIN_USERNAME;
+      const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
 
-          const id = get(["STUDENT NUMBER", "ID"]);
-          if (!id || id === "0") return null;
+      if (
+        adminUsername &&
+        adminPassword &&
+        cleanName === adminUsername &&
+        cleanId === adminPassword
+      ) {
+        console.log("✅ Admin login successful");
+        localStorage.clear();
+        localStorage.setItem("admin_authenticated", "true");
+        localStorage.setItem("admin_username", cleanName);
 
-          return {
-            id,
-            name: get(["NAME"]),
-            student_class: sheet.name.replace('FEES REGISTER', '').trim(),
-            // Match your specific Excel columns: "PREVIOUS BALANCE" and "2026 TERM1"
-            previous_balance: get(["PREVIOUS BALANCE", "BAL B/F"]),
-            term_1_2026: get(["2026 TERM1", "TERM 1 2026", "2026 TERM 1"])
-          };
-        }).filter(Boolean);
+        console.log("Admin session stored in localStorage");
+        setTimeout(() => {
+          console.log("Redirecting to /portal/admin");
+          router.push("/portal/admin");
+        }, 300);
+        return;
+      }
 
-        if (batch.length > 0) {
-          await supabase.from('student_ledger').upsert(batch, { onConflict: 'id' });
+      /* =======================
+         2️⃣ STAFF REGISTRATION (EC)
+      ======================== */
+      const ecPattern = /^(0|1|57|20)\d{5,6}[A-Z]$/i;
+      if (ecPattern.test(cleanId)) {
+        console.log("EC registration detected:", cleanId);
+        const ecNumber = cleanId.toUpperCase();
+
+        const { data: staffData } = await supabase
+          .from("staff_master_list")
+          .select("ec_number, full_name")
+          .eq("ec_number", ecNumber)
+          .single();
+
+        if (!staffData) {
+          setError("Invalid credentials.");
+          setLoading(false);
+          return;
+        }
+
+        localStorage.clear();
+        localStorage.setItem("verified_ec", staffData.ec_number);
+        localStorage.setItem("verified_name", staffData.full_name);
+        localStorage.setItem("staff_registration_initiated", "true");
+
+        setTimeout(() => {
+          console.log("Redirecting to /portal/register-staff");
+          router.push("/portal/register-staff");
+        }, 800);
+        return;
+      }
+
+      /* =======================
+         3️⃣ TEACHER/STAFF LOGIN (EMAIL) - FAUSTINO NYANGARI
+      ======================== */
+      if (cleanName.includes("@")) {
+        console.log("🔍 Looking up teacher with email:", cleanName);
+        
+        // Lookup staff in staff_profiles table
+        const { data: profile, error: profileError } = await supabase
+          .from("staff_profiles")
+          .select("*")
+          .ilike("email_address", cleanName)
+          .single();
+
+        console.log("Profile lookup:", { 
+          success: !!profile, 
+          error: profileError?.message,
+          profile: profile 
+        });
+
+        if (!profile) {
+          console.error("❌ No staff profile found");
+          setError("Invalid credentials.");
+          setLoading(false);
+          return;
+        }
+
+        // Check if account is approved and active
+        console.log("Account status:", {
+          is_approved: profile.is_approved,
+          is_active: profile.is_active,
+          role: profile.role
+        });
+
+        if (!profile.is_approved || !profile.is_active) {
+          console.log("❌ Account not approved or inactive");
+          setError("Account not active or pending approval.");
+          setLoading(false);
+          return;
+        }
+
+        // Check for FAUSTINO NYANGARI
+        if (cleanName === "fnyangari@gmail.com" && cleanId === "Dhovimazheke213#") {
+          console.log("✅ FAUSTINO NYANGARI authentication successful!");
+          
+          // Clear localStorage first
+          localStorage.clear();
+          console.log("LocalStorage cleared");
+          
+          // Store teacher session
+          localStorage.setItem("teacher_name", profile.full_name);
+          localStorage.setItem("teacher_role", profile.role);
+          localStorage.setItem("teacher_email", profile.email_address);
+          localStorage.setItem("teacher_ec", profile.ec_number);
+          localStorage.setItem("teacher_authenticated", "true");
+          localStorage.setItem("staff_profile_id", profile.id);
+          localStorage.setItem("login_timestamp", Date.now().toString());
+          
+          // Verify storage
+          console.log("✅ Teacher session stored:");
+          console.log("- teacher_name:", localStorage.getItem("teacher_name"));
+          console.log("- teacher_authenticated:", localStorage.getItem("teacher_authenticated"));
+          console.log("- teacher_role:", localStorage.getItem("teacher_role"));
+          
+          console.log("🔄 Redirecting to /portal/teacher in 500ms...");
+          
+          // Use window.location for a hard redirect
+          setTimeout(() => {
+            console.log("📍 Now redirecting to /portal/teacher");
+            window.location.href = "/portal/teacher";
+          }, 500);
+          
+          return;
+        }
+
+        console.log("❌ Not FAUSTINO or wrong password");
+        setError("Invalid credentials.");
+        setLoading(false);
+        return;
+      }
+
+      /* =======================
+         4️⃣ STUDENT LOGIN
+      ======================== */
+      if (!cleanName || !cleanId) {
+        setError("Please enter both fields.");
+        setLoading(false);
+        return;
+      }
+
+      console.log("Student login attempt with ID:", cleanId);
+      
+      if (cleanId.toUpperCase().startsWith("DET") || !isNaN(Number(cleanId))) {
+        const studentId = cleanId.toUpperCase();
+
+        const { data: studentData } = await supabase
+          .from("student_ledger")
+          .select("id, name, student_class, previous_balance, term_1_2026")
+          .eq("id", studentId)
+          .single();
+
+        if (studentData) {
+          console.log("Student found in ledger:", studentData.name);
+          const prev = Number(studentData.previous_balance) || 0;
+          const term = Number(studentData.term_1_2026) || 0;
+
+          localStorage.clear();
+          localStorage.setItem(
+            "portalSession",
+            JSON.stringify({
+              student: {
+                id: studentData.id,
+                name: studentData.name,
+                class: studentData.student_class,
+                balance: (prev + term).toString(),
+              },
+            })
+          );
+
+          setTimeout(() => {
+            console.log("Redirecting student to /portal/dashboard");
+            router.push("/portal/dashboard");
+          }, 800);
+          return;
+        }
+
+        const { data: fallback } = await supabase
+          .from("students")
+          .select("student_id, full_name, class, balance")
+          .eq("student_id", studentId)
+          .single();
+
+        if (fallback) {
+          console.log("Student found in fallback table:", fallback.full_name);
+          localStorage.clear();
+          localStorage.setItem(
+            "portalSession",
+            JSON.stringify({
+              student: {
+                id: fallback.student_id,
+                name: fallback.full_name,
+                class: fallback.class,
+                balance: fallback.balance || 0,
+              },
+            })
+          );
+
+          setTimeout(() => {
+            console.log("Redirecting student to /portal/dashboard");
+            router.push("/portal/dashboard");
+          }, 800);
+          return;
         }
       }
-      setStatus({ type: 'success', msg: "Finance Ledger Synced Successfully!" });
-      fetchData();
-    } catch (err: any) {
-      setStatus({ type: 'error', msg: "Upload Failed: " + err.message });
+
+      console.log("❌ No matching credentials found");
+      setError("Invalid credentials.");
+    } catch (err) {
+      console.error("❌ Login error:", err);
+      setError("An error occurred.");
+    } finally {
+      setLoading(false);
+      console.log("=== LOGIN ATTEMPT END ===");
     }
-    setLoading(null);
-  };
-
-  const generateDebtReport = () => {
-    const doc = new jsPDF();
-    // ... (Keep existing PDF styling logic)
-    const tableData = students.map(s => {
-      const info = getBalanceInfo(s);
-      const display = info.isNumeric ? `$${(info.value as number).toFixed(2)}` : info.value;
-      const status = info.isNumeric && (info.value as number) > 50 ? 'LOCKED' : 'ACTIVE';
-      return [s.id, s.name, s.student_class, display, status];
-    });
-
-    autoTable(doc, {
-      startY: 45,
-      head: [['ID', 'STUDENT NAME', 'CLASS', 'TOTAL OWING', 'PORTAL']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [30, 41, 59] }
-    });
-    doc.save(`Debt_Report_${new Date().toLocaleDateString()}.pdf`);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-12 font-sans space-y-10">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.4em] mb-1">Admin Terminal</p>
-          <h1 className="text-4xl font-black italic uppercase tracking-tighter text-slate-900 leading-none">Detema <span className="text-blue-600">Finance</span></h1>
-          <div className="flex gap-4 mt-6">
-            <button onClick={() => setView('finance')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'finance' ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'}`}>Financial Dashboard</button>
-            <button onClick={() => setView('staff')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${view === 'staff' ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200'}`}>
-              Staff Approvals {pendingStaff.length > 0 && <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center text-[8px] font-black">{pendingStaff.length}</span>}
-            </button>
-          </div>
-        </div>
-        <div className="flex gap-2">
-            <button onClick={generateDebtReport} className="bg-white border-2 border-slate-900 text-slate-900 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-slate-900 hover:text-white transition-all"><FileText size={14} /> Report</button>
-            <button onClick={() => { localStorage.clear(); router.push('/portal'); }} className="bg-red-50 text-red-600 p-4 rounded-2xl hover:bg-red-600 hover:text-white transition-all"><LogOut size={20}/></button>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 flex items-center justify-center p-6 font-sans relative overflow-hidden">
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-100/40 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/3 -left-40 w-96 h-96 bg-purple-100/30 rounded-full blur-3xl animate-pulse delay-1000" />
+      </div>
 
-      {view === 'finance' ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-500">
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">Total School Debt</p>
-              <h2 className="text-4xl font-black italic mt-1">${stats.totalOwed.toLocaleString(undefined, {minimumFractionDigits: 2})}</h2>
-            </div>
-            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="w-full max-w-md">
+        <div className="mb-6">
+          <Link
+            href="/"
+            className="group inline-flex items-center gap-2 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-lg hover:shadow-xl transition-all"
+          >
+            <ArrowLeft
+              size={16}
+              className="text-slate-400 group-hover:text-blue-600 transition-transform group-hover:-translate-x-1"
+            />
+            <span className="text-xs font-black uppercase text-slate-600">
+              Back
+            </span>
+          </Link>
+        </div>
+
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-6 py-3 rounded-full text-sm font-black uppercase tracking-widest mb-6 shadow-lg">
+            <Sparkles size={16} /> Portal <Sparkles size={16} />
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 mb-3 tracking-tighter">
+            Secure{" "}
+            <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+              Access
+            </span>
+          </h1>
+          <p className="text-slate-600 text-sm font-medium">
+            Authentication required
+          </p>
+        </div>
+
+        <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-8 shadow-2xl border border-white relative">
+          <div className="absolute -top-3 right-6 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+            <Shield size={12} /> Secure
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restricted Portals</p>
-                <h2 className="text-4xl font-black italic text-red-600 mt-1">{stats.lockedCount}</h2>
-              </div>
-              <ShieldAlert className="text-red-100" size={60} />
-            </div>
-            <div className="bg-blue-600 rounded-[2.5rem] p-8 text-white shadow-xl">
-              <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Database Status</p>
-              <h2 className="text-2xl font-black uppercase italic mt-1">Live & Secure</h2>
-            </div>
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-10">
-            <div className="lg:col-span-2 bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h3 className="font-black uppercase italic text-sm tracking-tight">Student Ledger</h3>
-                <div className="relative flex-1 max-w-xs">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="text" placeholder="Search name or ID..." className="w-full pl-10 pr-4 py-3 bg-white border-none rounded-xl text-xs font-bold shadow-inner" onChange={(e) => setSearchTerm(e.target.value)} />
+                <label className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2 mb-2">
+                  <GraduationCap size={12} /> Identifier
+                </label>
+                <div className="relative group">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 transition-all"
+                    placeholder=""
+                    autoComplete="username"
+                  />
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-blue-50 rounded-lg">
+                    <GraduationCap size={18} className="text-blue-600" />
+                  </div>
                 </div>
               </div>
-              <div className="max-h-[600px] overflow-y-auto">
-                <table className="w-full text-left">
-                  <thead className="sticky top-0 bg-white text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
-                    <tr><th className="p-6">Student</th><th className="p-6">Class</th><th className="p-6">Balance</th><th className="p-6">Access</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {filteredStudents.map(s => {
-                      const info = getBalanceInfo(s);
-                      return (
-                        <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-6">
-                            <p className="font-black text-slate-900 uppercase text-xs">{s.name}</p>
-                            <p className="text-[9px] font-bold text-slate-400 tracking-tighter">{s.id}</p>
-                          </td>
-                          <td className="p-6 text-[10px] font-black text-slate-500 uppercase">{s.student_class}</td>
-                          <td className="p-6 font-black text-xs text-slate-900">
-                            {info.isNumeric ? `$${(info.value as number).toLocaleString(undefined, {minimumFractionDigits:2})}` : info.value}
-                          </td>
-                          <td className="p-6">
-                            {info.isNumeric && (info.value as number) > 50 ? (
-                              <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">Locked</span>
-                            ) : (
-                              <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">Active</span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+
+              <div>
+                <label className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2 mb-2">
+                  <Lock size={12} /> Credential
+                </label>
+                <div className="relative group">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={id}
+                    onChange={(e) => setId(e.target.value)}
+                    className="w-full pl-12 pr-12 py-4 bg-white border-2 border-slate-100 rounded-2xl text-sm font-medium outline-none focus:border-blue-500 transition-all"
+                    placeholder=""
+                    required
+                    autoComplete="current-password"
+                  />
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-blue-50 rounded-lg">
+                    <Lock size={18} className="text-blue-600" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-blue-600"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-                <h3 className="text-xs font-black uppercase italic mb-6 text-slate-400">Sync Data</h3>
-                <div className="space-y-4">
-                    <UploadAction title="Finance Ledger" icon={<Wallet />} isLoading={loading==='finance'} onUpload={handleFinanceUpload} color="bg-emerald-500" />
-                </div>
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 flex items-start gap-4">
+                <AlertCircle size={20} className="text-red-500 shrink-0" />
+                <p className="text-xs text-red-600 font-medium">{error}</p>
               </div>
-              {status && (
-                <div className={`p-6 rounded-[2rem] font-bold text-[10px] uppercase text-white shadow-lg ${status.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>
-                  {status.msg}
-                </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:shadow-xl transition-all disabled:opacity-50 active:scale-95 flex items-center justify-center gap-4"
+            >
+              {loading ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                "Authenticate"
               )}
+              {!loading && <ArrowRight size={18} />}
+            </button>
+          </form>
+        </div>
+
+        <div className="mt-8 text-center">
+          <div className="inline-flex items-center gap-4 text-[10px] text-slate-500 font-medium">
+            <div className="flex items-center gap-2">
+              <Shield size={12} /> <span>Secure Portal</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Building size={12} /> <span>Detema Secondary</span>
             </div>
           </div>
-        </>
-      ) : (
-        /* ... Staff Approval UI (keep your existing code here) ... */
-        <div className="text-center py-20 bg-white rounded-[3rem]">Staff Approval Logic Goes Here</div>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function UploadAction({ title, icon, isLoading, onUpload, color }: any) {
-  return (
-    <label className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl cursor-pointer hover:bg-white hover:shadow-md transition-all border-2 border-transparent hover:border-slate-100 group">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg ${color} group-hover:rotate-6 transition-transform`}>{icon}</div>
-      <div className="flex-1 text-left">
-        <p className="text-[10px] font-black uppercase text-slate-900">{title}</p>
-        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{isLoading ? "Syncing..." : "Upload Excel"}</p>
-      </div>
-      {isLoading ? <Loader2 className="animate-spin text-slate-400" size={16}/> : <Upload className="text-slate-400" size={16}/>}
-      <input type="file" className="hidden" onChange={onUpload} disabled={isLoading} />
-    </label>
-  );
-}
+export default StealthPortalLogin;
